@@ -54,7 +54,7 @@
   }
   .hud.show { opacity: 1; }
   .tl { top: 20px; left: 20px; } .tr { top: 20px; right: 20px; text-align: right; }
-  .bl { bottom: 20px; left: 20px; } .br { bottom: 20px; right: 20px; text-align: right; }
+  .bl { bottom: 20px; left: 20px; } .br { bottom: 20px; right: 20px; display: flex; align-items: center; }
   .hud i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--red);
            margin-right: 8px; vertical-align: 1px; animation: blink 1.4s infinite; }
   @keyframes blink { 50% { opacity: .15; } }
@@ -66,17 +66,54 @@
   .hud-btn:hover { color: var(--gold); }
   .hud-btn:focus-visible { outline: 1px solid var(--gold); outline-offset: 4px; }
   .hud .sep { margin: 0 12px; opacity: .5; }
-  #contact.on { color: rgba(255,255,255,.85); text-transform: none; letter-spacing: .08em; }
+  /* 联系按钮：渐变描边胶囊 + 流光 + 呼吸光晕 */
+  #contact {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 9px 16px 9px 14px; border-radius: 999px;
+    color: #fff; letter-spacing: .24em; font-size: 11px;
+    border: 1px solid transparent;
+    background:
+      linear-gradient(110deg, transparent 35%, rgba(255,255,255,.22) 50%, transparent 65%) 0 0 / 250% 100% no-repeat padding-box,
+      linear-gradient(90deg, rgba(255,42,61,.20), rgba(255,201,77,.10)) padding-box,
+      linear-gradient(#0b0b12, #0b0b12) padding-box,
+      linear-gradient(90deg, var(--red), var(--gold)) border-box;
+    animation: sheen 3.6s ease-in-out infinite;
+    transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s, color .2s;
+  }
+  /* 呼吸光圈放在伪元素上，只动 transform/opacity（合成层，不重绘），也不和 hover 阴影抢 box-shadow */
+  #contact::before {
+    content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+    border: 1px solid rgba(255,42,61,.7); animation: halo 2.8s ease-out infinite;
+  }
+  #contact.on::before { animation: none; opacity: 0; }   /* 已互动过就不再催促 */
+  #contact .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #3dff8a;
+    box-shadow: 0 0 8px #3dff8a; animation: blink 1.6s infinite;
+  }
+  #contact .arr { color: var(--gold); transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+  @media (hover: hover) {   /* 触屏不留"粘住"的悬停态 */
+    #contact:hover { color: #fff; transform: translateY(-2px); box-shadow: 0 6px 24px rgba(255,60,50,.35); }
+    #contact:hover .arr { transform: translateX(4px); }
+  }
+  #contact:active { transform: scale(.97); transition-duration: .08s; }
+  #contact.on { letter-spacing: .08em; text-transform: none; }
+  #contact.on .lbl { font-size: 12px; }
+  @keyframes sheen { 0%, 55% { background-position: 160% 0, 0 0, 0 0, 0 0; } 100% { background-position: -60% 0, 0 0, 0 0, 0 0; } }
+  @keyframes halo {
+    0% { transform: scale(1); opacity: .9; }
+    70%, 100% { transform: scale(1.12, 1.6); opacity: 0; }
+  }
   #contact[data-tip]::after {
     content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 8px);
     padding: 4px 8px; background: var(--gold); color: #05050a; letter-spacing: .1em;
-    white-space: nowrap; font-size: 10px;
+    white-space: nowrap; font-size: 10px; border-radius: 4px; animation: tip .2s ease-out;
   }
+  @keyframes tip { from { opacity: 0; transform: translateY(4px); } }
   @media (max-width: 600px) { .hud { font-size: 9px; } .tl,.tr{top:16px} .tl,.bl{left:16px} .tr,.br{right:16px} .bl,.br{bottom:16px} }
 
   /* 大模型排行榜 */
   #rank {
-    position: fixed; left: 50%; bottom: 48px; transform: translate(-50%, 12px);
+    position: fixed; left: 50%; bottom: 64px; transform: translate(-50%, 12px);
     width: min(900px, calc(100% - 32px));
     font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px;
     opacity: 0; pointer-events: none;
@@ -124,7 +161,8 @@
   #rank .foot a { color: inherit; text-decoration: none; }
   #rank .foot a:hover { color: var(--gold); }
   @media (max-width: 640px) {
-    #rank { bottom: 40px; }
+    #rank { bottom: 58px; }
+    #contact { padding: 7px 12px 7px 11px; font-size: 10px; gap: 8px; }
     #rank .row { grid-template-columns: 2em minmax(0, 1fr) 48px 3.4em; }
     #rank .row .ch { display: none; }
     #rank .head .ttl, #rank .foot .legend { display: none; }

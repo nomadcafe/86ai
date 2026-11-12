@@ -290,7 +290,7 @@
     let cyB = H / 2;
     const panelH = Rank.height();
     if (panelH) {
-      const subTop = H - (W <= 640 ? 40 : 48) - panelH - 84;  // 副标题区约 60px + 间距
+      const subTop = H - (W <= 640 ? 58 : 64) - panelH - 84;  // 副标题区约 60px + 间距
       fsB = Math.min(fsB, (subTop - 18 - 50) / 1.05);
       cyB = Math.min(H / 2, subTop - 18 - fsB * 0.55);
     }
@@ -330,7 +330,8 @@
     const addr = [...atob('aWEuNjhAMzIx')].reverse().join('');
     if (!contact.classList.contains('on')) {
       contact.classList.add('on');
-      contact.textContent = addr;
+      contact.querySelector('.lbl').textContent = addr;
+      contact.querySelector('.arr').textContent = '↗';
       contact.setAttribute('aria-label', '发送邮件至 ' + addr);
       let tip = 'CLICK TO EMAIL';
       try { await navigator.clipboard.writeText(addr); tip = 'COPIED ✓'; } catch {}
