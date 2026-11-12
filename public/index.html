@@ -5,10 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <title>86.Ai</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;900&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<meta name="description" content="+86 · Intelligence from China">
+<meta name="theme-color" content="#05050a">
+<meta property="og:type" content="website">
+<meta property="og:title" content="86.Ai — CHINA AI">
+<meta property="og:description" content="+86 · Intelligence from China">
+<meta property="og:image" content="/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<!-- 字体自托管（Google Fonts 在中国大陆无法访问，会阻塞渲染） -->
+<link rel="preload" href="/fonts/orbitron-900-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/jetbrains-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  @font-face {
+    font-family: "Orbitron"; font-weight: 900; font-style: normal; font-display: swap;
+    src: url("/fonts/orbitron-900-latin.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "JetBrains Mono"; font-weight: 400; font-style: normal; font-display: swap;
+    src: url("/fonts/jetbrains-mono-400-latin.woff2") format("woff2");
+  }
   :root {
     --bg: #05050a;
     --red: #ff2a3d;
@@ -120,6 +138,9 @@
     #rank .foot { justify-content: flex-end; }
     .bl { display: none; }
   }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0s !important; transition-delay: 0s !important; animation: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -151,6 +172,8 @@
   // ========================
 
   const FONT = '"Orbitron", "Helvetica Neue", Arial, sans-serif';
+  const LOW_END = (navigator.hardwareConcurrency || 8) <= 4;
+  const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const BG = '#05050a';
   const cvs = document.getElementById('c');
   const ctx = cvs.getContext('2d');
@@ -207,7 +230,7 @@
     o.fillStyle = '#fff';
     o.fillText(text, W / 2, cy);
     const d = o.getImageData(0, 0, W, H).data;
-    const MAX = W < 700 ? 2200 : 5200;
+    const MAX = W < 700 ? 2200 : LOW_END ? 3400 : 5200;
     let gap = Math.max(2, Math.round(fs / 70)), pts;
     for (;;) {
       pts = [];
@@ -312,6 +335,13 @@
         s: on ? gapA * 0.6 : rand(.6, 1.4),
       });
     }
+    if (REDUCE) {
+      formB(); flash = 0;
+      for (const p of P) { p.x = p.tx; p.y = p.ty; p.vx = p.vy = 0; p.r = p.tr; p.g = p.tg; p.b = p.tb; }
+      sub.classList.add('show'); huds.forEach(h => h.classList.add('show'));
+      Rank.show();
+      return;
+    }
     const k = quick ? 0.55 : 1;
     at(1500 * k, () => explode());
     at(2250 * k, () => formB());
@@ -347,6 +377,7 @@
     });
   }
 
+  const buckets = new Map();
   function updateParticles(now) {
     // 爆炸时用叠加发光，成形后用正常混合，保证红金颜色饱和
     ctx.globalCompositeOperation = freeMode ? 'lighter' : 'source-over';
@@ -357,8 +388,8 @@
         const dx = p.x - W / 2, dy = p.y - H / 2;
         p.vx += -dy * 0.0009; p.vy += dx * 0.0009; // 漩涡
       } else if (p.on) {
-        const jx = Math.sin(now * 0.002 + p.ph) * 0.6;
-        const jy = Math.cos(now * 0.0017 + p.ph) * 0.6;
+        const jx = REDUCE ? 0 : Math.sin(now * 0.002 + p.ph) * 0.6;
+        const jy = REDUCE ? 0 : Math.cos(now * 0.0017 + p.ph) * 0.6;
         p.vx = (p.vx + (p.tx + jx - p.x) * 0.055) * 0.84;
         p.vy = (p.vy + (p.ty + jy - p.y) * 0.055) * 0.84;
       } else {
@@ -376,11 +407,21 @@
       p.x += p.vx; p.y += p.vy;
       p.r += (p.tr - p.r) * 0.06; p.g += (p.tg - p.g) * 0.06; p.b += (p.tb - p.b) * 0.06;
 
-      ctx.fillStyle = p.on
-        ? `rgb(${p.r | 0},${p.g | 0},${p.b | 0})`
-        : `rgba(${p.r | 0},${p.g | 0},${p.b | 0},.35)`;
-      ctx.fillRect(p.x, p.y, p.s, p.s);
+      const key = (((p.r >> 3) << 10) | ((p.g >> 3) << 5) | (p.b >> 3)) * 2 + (p.on ? 1 : 0);
+      let arr = buckets.get(key);
+      if (!arr) buckets.set(key, (arr = []));
+      arr.push(p.x, p.y, p.s);
     }
+    for (const [key, arr] of buckets) {
+      if (!arr.length) continue;
+      const c = key >> 1, r = ((c >> 10) & 31) * 8 + 4, g = ((c >> 5) & 31) * 8 + 4, b = (c & 31) * 8 + 4;
+      ctx.fillStyle = key & 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},.35)`;
+      ctx.beginPath();
+      for (let i = 0; i < arr.length; i += 3) ctx.rect(arr[i], arr[i + 1], arr[i + 2], arr[i + 2]);
+      ctx.fill();
+      arr.length = 0;
+    }
+    if (buckets.size > 3000) buckets.clear();
     if (flash > 0.01) {
       ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = `rgba(255,255,255,${flash})`;
@@ -429,6 +470,7 @@
     huds.forEach(h => h.classList.remove('show'));
     sub.style.top = (cyB + fsB * 0.55 + 18) + 'px';
     phase = 'intro'; t0 = performance.now();
+    if (REDUCE) startParticles();
   }
 
   // 北京时间
@@ -492,9 +534,9 @@
 
     function countUp(target, fmt) {
       cancelAnimationFrame(raf);
-      const t0 = performance.now(), D = 1400;
+      const t0 = performance.now(), D = REDUCE ? 0 : 1400;
       const tick = now => {
-        const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
+        const k = D ? Math.min(1, (now - t0) / D) : 1, e = 1 - Math.pow(1 - k, 3);
         stat.innerHTML = fmt(target * e);
         if (k < 1) raf = requestAnimationFrame(tick);
       };
