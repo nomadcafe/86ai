@@ -1,7 +1,7 @@
 // Cloudflare Pages Function: GET /api/rankings
 // 读取 OpenRouter 排名页里给读屏 / 爬虫准备的文本表格（data-ssr-content="rankings-summary"），
 // 返回全球大模型 Token 用量榜（近 30 天）和各公司请求份额，并标出中国模型。
-// 结果用 Cloudflare Cache API 缓存 6 小时，过期后下一次访问重新抓取，所以榜单会“偶尔自动更新”。
+// 结果用 Cloudflare Cache API 缓存：6 小时内直接返回，过期后先返回旧数据再后台刷新（stale-while-revalidate）。
 
 const SOURCE_URL = 'https://openrouter.ai/rankings';
 const TOP_N = 10;
@@ -48,13 +48,17 @@ function tokensNum(s) {
   return parseFloat(m[1]) * ({ '': 1, K: 1e3, M: 1e6, B: 1e9, T: 1e12 })[m[2].toUpperCase()];
 }
 
-const CACHE_TTL = 6 * 3600;   // 边缘缓存 6 小时
-const BROWSER_TTL = 600;      // 浏览器缓存 10 分钟
+const FRESH_TTL = 6 * 3600;        // 超过 6 小时就在后台刷新
+const KEEP_TTL = 7 * 24 * 3600;    // 边缘缓存保留 7 天：源站挂了也能返回上一份好数据
+const BROWSER_TTL = 600;           // 浏览器缓存 10 分钟
 const COMMON = {
   'Content-Type': 'application/json; charset=utf-8',
   'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet',
   'X-Content-Type-Options': 'nosniff',
 };
+const reply = (body, cacheState) => new Response(body, {
+  headers: { ...COMMON, 'Cache-Control': `public, max-age=${BROWSER_TTL}`, 'X-Cache': cacheState },
+});
 
 async function build() {
   const r = await fetch(SOURCE_URL, {
@@ -92,25 +96,33 @@ async function build() {
   };
 }
 
+// 抓取并写入缓存，返回 JSON 字符串
+async function refresh(cache, key) {
+  const data = await build();
+  const body = JSON.stringify(data);
+  await cache.put(key, new Response(body, {
+    headers: { ...COMMON, 'Cache-Control': `public, max-age=${KEEP_TTL}`, 'X-Updated': String(data.updated) },
+  }));
+  return body;
+}
+
 export async function onRequestGet({ request, waitUntil }) {
   const cache = caches.default;
   const key = new Request(new URL('/api/rankings', request.url).toString());
 
   const hit = await cache.match(key);
   if (hit) {
-    return new Response(hit.body, {
-      headers: { ...COMMON, 'Cache-Control': `public, max-age=${BROWSER_TTL}`, 'X-Cache': 'HIT' },
-    });
+    // stale-while-revalidate：先返回缓存，过期了就在后台刷新，访客不用等源站
+    const age = Date.now() - (+hit.headers.get('X-Updated') || 0);
+    if (age > FRESH_TTL * 1000) {
+      waitUntil(refresh(cache, key).catch(e => console.error('rankings refresh failed:', e)));
+      return reply(hit.body, 'STALE');
+    }
+    return reply(hit.body, 'HIT');
   }
 
   try {
-    const body = JSON.stringify(await build());
-    waitUntil(cache.put(key, new Response(body, {
-      headers: { ...COMMON, 'Cache-Control': `public, max-age=${CACHE_TTL}` },
-    })));
-    return new Response(body, {
-      headers: { ...COMMON, 'Cache-Control': `public, max-age=${BROWSER_TTL}`, 'X-Cache': 'MISS' },
-    });
+    return reply(await refresh(cache, key), 'MISS');
   } catch (e) {
     console.error('rankings failed:', e);   // 细节只记在 Cloudflare 日志里，不返回给访客
     return new Response(JSON.stringify({ error: 'unavailable' }), {

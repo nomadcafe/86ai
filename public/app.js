@@ -30,16 +30,18 @@
     return Math.min(H * 0.28, (W * 0.84 * 100) / w100, 340);
   }
 
+  // 故障图层只画文字所在的横条（约 1.6 倍字号高），比整屏画布省一半以上内存
+  let bandY, bandH;
   function makeLayer(text, fs, color, glow) {
     const c = document.createElement('canvas');
-    c.width = W * DPR; c.height = H * DPR;
+    c.width = W * DPR; c.height = Math.ceil(bandH * DPR);
     const o = c.getContext('2d');
     o.scale(DPR, DPR);
     o.font = `900 ${fs}px ${FONT}`;
     o.textAlign = 'center'; o.textBaseline = 'middle';
     if (glow) { o.shadowColor = glow; o.shadowBlur = fs * 0.18; }
     o.fillStyle = color;
-    o.fillText(text, W / 2, H / 2);
+    o.fillText(text, W / 2, H / 2 - bandY);
     return c;
   }
 
@@ -110,9 +112,9 @@
     const dx = rand(-1, 1) * g * fsA * 0.07;
     const jy = rand(-1, 1) * g * 4;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.drawImage(L.r, -dx, jy, W, H);
-    ctx.drawImage(L.c, dx, -jy, W, H);
-    ctx.drawImage(L.w, 0, 0, W, H);
+    ctx.drawImage(L.r, -dx, bandY + jy, W, bandH);
+    ctx.drawImage(L.c, dx, bandY - jy, W, bandH);
+    ctx.drawImage(L.w, 0, bandY, W, bandH);
     // 横向撕裂切片
     const n = (g * 7) | 0;
     for (let i = 0; i < n; i++) {
@@ -123,7 +125,7 @@
       ctx.fillStyle = BG;
       ctx.fillRect(0, sy, W, sh);
       ctx.globalCompositeOperation = 'lighter';
-      ctx.drawImage(L.w, 0, sy * DPR, W * DPR, sh * DPR, off, sy, W, sh);
+      ctx.drawImage(L.w, 0, (sy - bandY) * DPR, W * DPR, sh * DPR, off, sy, W, sh);
     }
     // 噪点线
     ctx.globalCompositeOperation = 'source-over';
@@ -152,8 +154,9 @@
   }
 
   // ---------- 粒子 ----------
-  function startParticles() {
+  function startParticles(morph) {
     phase = 'particles';
+    layers = new Map();   // 开场结束，释放故障图层
     const N = Math.max(ptsA.length, ptsB.length) + (W < 700 ? 200 : 450);
     P = [];
     for (let i = 0; i < N; i++) {
@@ -171,6 +174,12 @@
     if (REDUCE) {
       formB(); flash = 0;
       for (const p of P) { p.x = p.tx; p.y = p.ty; p.vx = p.vy = 0; p.r = p.tr; p.g = p.tg; p.b = p.tb; }
+      sub.classList.add('show'); huds.forEach(h => h.classList.add('show'));
+      Rank.show();
+      return;
+    }
+    if (morph) {   // 窗口尺寸变化：不重播开场，粒子直接重组成 CHINA AI
+      formB(); flash = 0;
       sub.classList.add('show'); huds.forEach(h => h.classList.add('show'));
       Rank.show();
       return;
@@ -275,7 +284,7 @@
 
   function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
 
-  function restart(full) {
+  function restart({ full = false, morph = false } = {}) {
     quick = !full && seenBefore();
     Rank.hide();
     timers.forEach(clearTimeout); timers.length = 0;
@@ -296,31 +305,35 @@
     }
     ({ pts: ptsA, gap: gapA } = sample(TEXT_A, fsA));
     ({ pts: ptsB, gap: gapB } = sample(TEXT_B, fsB, cyB));
+    bandH = fsA * 1.6; bandY = H / 2 - bandH / 2;
     layers = new Map();
     steps = buildSteps();
+    // 预先生成故障图层，避免开场第一帧现场绘制（带 shadowBlur）造成卡顿
+    if (!REDUCE && !morph) for (const s of steps) if (s.on) getLayers(s.text || TEXT_A);
     P = []; freeMode = false; flash = 0;
     sub.classList.remove('show');
     huds.forEach(h => h.classList.remove('show'));
     sub.style.top = (cyB + fsB * 0.55 + 18) + 'px';
     phase = 'intro'; t0 = performance.now();
-    if (REDUCE) startParticles();
+    if (REDUCE || morph) startParticles(morph);
   }
 
   // 北京时间
   const clock = document.getElementById('clock');
-  setInterval(() => {
+  const tickClock = () => {
     const s = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Shanghai', hour12: false });
     clock.textContent = 'BEIJING ' + s;
-  }, 1000);
+  };
+  tickClock(); setInterval(tickClock, 1000);
 
   // 交互
   addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; });
   addEventListener('pointerleave', () => { mx = my = -9999; });
   addEventListener('pointerup', e => { if (e.pointerType !== 'mouse') { mx = my = -9999; } });
-  addEventListener('click', e => { if (!e.target.closest('#rank, #contact')) restart(true); });
+  addEventListener('click', e => { if (!e.target.closest('#rank, #contact')) restart({ full: true }); });
   addEventListener('keydown', e => {
     if (e.target.closest && e.target.closest('button, a')) return;   // 按钮/链接上的回车不触发重播
-    if (e.code === 'Space' || e.code === 'Enter') restart(true);
+    if (e.code === 'Space' || e.code === 'Enter') restart({ full: true });
   });
 
   // 联系邮箱：源码里不出现明文，点击才解码显示（防爬虫采集）
@@ -341,7 +354,10 @@
       location.href = 'mailto:' + addr;
     }
   });
-  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(restart, 250); });
+  let rt; addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => restart({ morph: phase === 'particles' }), 250);
+  });
 
   // 等字体加载（最多 1.5 秒）再开始，保证粒子取样用的是正确字体
   const ready = document.fonts

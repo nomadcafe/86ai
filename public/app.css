@@ -17,6 +17,7 @@
   html, body { height: 100%; overflow: hidden; background: var(--bg); color: #fff; }
   body { font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; cursor: crosshair; user-select: none; }
   canvas { position: fixed; inset: 0; display: block; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
   /* 暗角 + 扫描线 */
   .overlay { position: fixed; inset: 0; pointer-events: none; }
