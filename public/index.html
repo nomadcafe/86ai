@@ -80,6 +80,20 @@
   .hud i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--red);
            margin-right: 8px; vertical-align: 1px; animation: blink 1.4s infinite; }
   @keyframes blink { 50% { opacity: .15; } }
+  .hud-btn {
+    all: unset; cursor: pointer; position: relative; color: inherit;
+    font: inherit; letter-spacing: inherit; transition: color .2s;
+  }
+  .hud.show .hud-btn { pointer-events: auto; }
+  .hud-btn:hover { color: var(--gold); }
+  .hud-btn:focus-visible { outline: 1px solid var(--gold); outline-offset: 4px; }
+  .hud .sep { margin: 0 12px; opacity: .5; }
+  #contact.on { color: rgba(255,255,255,.85); text-transform: none; letter-spacing: .08em; }
+  #contact[data-tip]::after {
+    content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 8px);
+    padding: 4px 8px; background: var(--gold); color: #05050a; letter-spacing: .1em;
+    white-space: nowrap; font-size: 10px;
+  }
   @media (max-width: 600px) { .hud { font-size: 9px; } .tl,.tr{top:16px} .tl,.bl{left:16px} .tr,.br{right:16px} .bl,.br{bottom:16px} }
 
   /* 大模型排行榜 */
@@ -157,7 +171,7 @@
 <div class="hud tl"><i></i>86.AI // ONLINE</div>
 <div class="hud tr" id="clock">BEIJING --:--:--</div>
 <div class="hud bl">39.9042° N · 116.4074° E</div>
-<div class="hud br">CLICK TO REPLAY</div>
+<div class="hud br"><button class="hud-btn" id="contact" type="button">CONTACT</button><span class="sep">·</span><button class="hud-btn" id="replay" type="button">REPLAY ↺</button></div>
 
 <div id="rank">
   <div class="head"><b><span class="ttl">GLOBAL LLM USAGE · </span>TOP 10 · 30 DAYS</b><span class="stat" id="rankStat"></span></div>
@@ -485,8 +499,29 @@
   addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; });
   addEventListener('pointerleave', () => { mx = my = -9999; });
   addEventListener('pointerup', e => { if (e.pointerType !== 'mouse') { mx = my = -9999; } });
-  addEventListener('click', e => { if (!e.target.closest('#rank')) restart(true); });
-  addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Enter') restart(true); });
+  addEventListener('click', e => { if (!e.target.closest('#rank, #contact')) restart(true); });
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('button, a')) return;   // 按钮/链接上的回车不触发重播
+    if (e.code === 'Space' || e.code === 'Enter') restart(true);
+  });
+
+  // 联系邮箱：源码里不出现明文，点击才解码显示（防爬虫采集）
+  // 第一次点击：显示并复制；之后点击：打开邮件客户端
+  const contact = document.getElementById('contact');
+  contact.addEventListener('click', async () => {
+    const addr = [...atob('aWEuNjhAMzIx')].reverse().join('');
+    if (!contact.classList.contains('on')) {
+      contact.classList.add('on');
+      contact.textContent = addr;
+      contact.setAttribute('aria-label', '发送邮件至 ' + addr);
+      let tip = 'CLICK TO EMAIL';
+      try { await navigator.clipboard.writeText(addr); tip = 'COPIED ✓'; } catch {}
+      contact.dataset.tip = tip;
+      setTimeout(() => delete contact.dataset.tip, 1600);
+    } else {
+      location.href = 'mailto:' + addr;
+    }
+  });
   let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(restart, 250); });
 
   // 等字体加载（最多 1.5 秒）再开始，保证粒子取样用的是正确字体
