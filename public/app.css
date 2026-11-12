@@ -166,6 +166,7 @@
     #contact { padding: 7px 12px 7px 11px; font-size: 10px; gap: 8px; }
     #rank .row { grid-template-columns: 2em minmax(0, 1fr) 48px 3.4em; }
     #rank .row .ch { display: none; }
+    #sub .en { letter-spacing: .16em; }
     #rank .head .ttl, #rank .foot .legend { display: none; }
     #rank .foot { justify-content: flex-end; }
     .bl { display: none; }
