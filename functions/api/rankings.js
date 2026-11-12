@@ -53,6 +53,7 @@ const BROWSER_TTL = 600;      // 浏览器缓存 10 分钟
 const COMMON = {
   'Content-Type': 'application/json; charset=utf-8',
   'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet',
+  'X-Content-Type-Options': 'nosniff',
 };
 
 async function build() {
@@ -67,7 +68,7 @@ async function build() {
     .filter(c => c.length >= 5 && /^\d+$/.test(c[0]))
     .slice(0, TOP_N)
     .map(([rank, name, author, tokens, change]) => ({
-      rank: +rank, name, tokens, change,
+      rank: +rank, name: name.slice(0, 60), tokens: tokens.slice(0, 10), change: change.slice(0, 8),
       tokensNum: tokensNum(tokens),
       author: LABELS[norm(author)] || author,
       cn: isCN(author),
@@ -111,7 +112,8 @@ export async function onRequestGet({ request, waitUntil }) {
       headers: { ...COMMON, 'Cache-Control': `public, max-age=${BROWSER_TTL}`, 'X-Cache': 'MISS' },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e.message || e) }), {
+    console.error('rankings failed:', e);   // 细节只记在 Cloudflare 日志里，不返回给访客
+    return new Response(JSON.stringify({ error: 'unavailable' }), {
       status: 502, headers: { ...COMMON, 'Cache-Control': 'no-store' },
     });
   }
